@@ -32,17 +32,19 @@ test "voronoi cells 1 pt" {
     std.debug.print("\nDone!\n", .{});
 }
 
-test "voronoi cells 6 pts" {
-    const pts = try la.genRandomPoints(testing.allocator, 6, 0);
+test "voronoi cells 8 pts" {
+    const pts = try la.genRandomPoints(testing.allocator, 8, 89);
     defer testing.allocator.free(pts);
     std.debug.print("\nCell nuclei:\n", .{});
     for (pts) |p| std.debug.print("({d:.3}, {d:.3})\n", .{ p[0], p[1] });
 
+    // vertex 0
     const cell_verts = try gen.genVoronoiCell(testing.allocator, pts[0], pts[1..]);
     defer testing.allocator.free(cell_verts);
     std.debug.print("\nCell vertices:\n", .{});
     for (cell_verts, 0..) |c, j| {
         std.debug.print("\n{}. ({d:.3}, {d:.3})", .{ j, c[0], c[1] });
     }
+
     std.debug.print("\nDone!\n", .{});
 }

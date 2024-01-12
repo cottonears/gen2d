@@ -65,7 +65,7 @@ pub fn getEquidistantLine(a: vec2f, b: vec2f) ?Line {
 
 /// Uses basic algebra to find the intersection of two lines (equivalent to the determinant method, but fasters)
 pub fn getIntersection(a: Line, b: Line) vec2f {
-    const i: u1 = if (math.fabs(a.direction[1]) > math.fabs(a.direction[0])) 1 else 0;
+    const i: u1 = if (@abs(a.direction[1]) > @abs(a.direction[0])) 1 else 0;
     const j: u1 = i +% 1; // TODO: test performance vs. more conventional way (i.e., make i & j u8s and use an if-else expression)
     const rji = a.direction[j] / a.direction[i];
     const denom = (b.direction[j] - rji * b.direction[i]);
@@ -112,7 +112,7 @@ pub fn genRandomPoints(allocator: mem.Allocator, n: usize, seed: u64) ![]vec2f {
 
 // // this way uses basic algebra (should be equivalent)
 // fn getIntersection2(a: vec2f, r: vec2f, b: vec2f, s: vec2f) vec2f {
-//     const i: u1 = if (math.fabs(r[0]) > math.fabs(r[1])) 0 else 1;
+//     const i: u1 = if (@abs(r[0]) > @abs(r[1])) 0 else 1;
 //     const j: u1 = i +% 1; //if (i > 0) 0 else 1; // i +% 1; //
 //     const rji = r[j] / r[i];
 //     const beta = (a[j] - b[j] + rji * (b[i] - a[i])) / (s[j] - rji * s[i]);
