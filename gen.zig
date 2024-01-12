@@ -2,39 +2,36 @@ const std = @import("std");
 const la = @import("la.zig");
 const math = std.math;
 const mem = std.mem;
-
 const print_debug = false;
 const vec2f = @Vector(2, f32);
+
+const LineWithDist = struct{
+    .line : Line,
+    .dist : f32,
+};
+
 const frame_lines = [_]la.Line{
     la.Line{
         .point = [_]f32{ 0, 0 },
         .direction = [_]f32{ 1, 0 },
         .normal = [_]f32{ 0, 1 },
-        .ref_dist = undefined,
     },
     la.Line{
         .point = [_]f32{ 1, 0 },
         .direction = [_]f32{ 0, 1 },
         .normal = [_]f32{ -1, 0 },
-        .ref_dist = undefined,
     },
     la.Line{
         .point = [_]f32{ 1, 1 },
         .direction = [_]f32{ -1, 0 },
         .normal = [_]f32{ 0, -1 },
-        .ref_dist = undefined,
     },
     la.Line{
         .point = [_]f32{ 0, 1 },
         .direction = [_]f32{ 0, -1 },
         .normal = [_]f32{ 1, 0 },
-        .ref_dist = undefined,
     },
 };
-// TODO: it is nice to have the ref_dist together with the line details,
-// but it doesn't belong in the same struct. Is there a nicer way we can
-// glue these two things together? Maybe with an annonymous struct, or just
-// by using a Hashmap (where the point + dir vectors are the keys)?
 
 /// Gets all potential boundary lines around the point a
 pub fn getVoronoiLinesForPoint(allocator: mem.Allocator, a: vec2f, other_pts: []vec2f) ![]la.Line {

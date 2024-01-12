@@ -1,2 +1,2 @@
 # gen2d
-A zig library for 2D procedural generation
+A just-for-fun zig library for 2D procedural generation
