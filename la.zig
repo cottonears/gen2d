@@ -11,10 +11,11 @@ pub const Line = struct {
     point: vec2f, // a point on the line
 
     pub fn init(point: vec2f, dir: vec2f) Line {
-        // TODO: check norm of dir and normalise if needed
+        const norm_squared = @reduce(.Add, dir * dir);
+        const norm_coeff = if (norm_squared == 1.0) 1.0 else 1.0 / @sqrt(norm_squared);
         return Line{
-            .direction = dir,
-            .normal = [_]f32{ -dir[1], dir[0] },
+            .direction = [_]f32{ norm_coeff * dir[0], norm_coeff * dir[1] },
+            .normal = [_]f32{ -norm_coeff * dir[1], norm_coeff * dir[0] },
             .point = point,
         };
     }
@@ -22,14 +23,16 @@ pub const Line = struct {
     /// Gets a point's displacement from this line.
     /// This will be positive if the point lies on the same side as the normal.
     pub fn getDisplacement(self: *const Line, p: vec2f) f32 {
-        // TODO: try doing this with @reduce(.Add, norm * diff) and compare performance
-        const diff = p - self.point;
-        return self.normal[0] * diff[0] + self.normal[1] * diff[1];
+        return innerProduct(self.normal, p - self.point);
     }
 };
 
 pub fn euclideanNorm2(v: vec2f) f32 {
     return @sqrt(v[0] * v[0] + v[1] * v[1]);
+}
+
+pub fn innerProduct(a: vec2f, b: vec2f) f32 {
+    return @reduce(.Add, a * b);
 }
 
 /// Returns a line that connects the provided points.
@@ -44,7 +47,7 @@ pub fn getEquidistantLine(a: vec2f, b: vec2f) ?Line {
     if (@reduce(.And, a == b)) return null;
     const d = a - b;
     const mid = [_]f32{ b[0] + 0.5 * d[0], b[1] + 0.5 * d[1] };
-    return Line.init(mid, d);
+    return Line.init(mid, [_]f32{ d[1], -d[0] });
 }
 
 /// Uses basic algebra to find the intersection of two lines (equivalent to the determinant method, but faster)
@@ -68,4 +71,105 @@ pub fn genRandomPoints(allocator: mem.Allocator, n: usize, seed: u64) ![]vec2f {
         vec_array[i] = [_]f32{ r_x, r_y };
     }
     return vec_array;
+}
+
+//
+// LA tests
+//
+const testing = std.testing;
+const time = std.time;
+const rng_seed: u64 = 1000;
+const tolerance: f32 = 0.0001;
+
+test "gen random points" {
+    const pts = try genRandomPoints(testing.allocator, 1000, rng_seed);
+    var found_left = false;
+    var found_right = false;
+    var found_high = false;
+    var found_low = false;
+    defer testing.allocator.free(pts);
+    for (pts) |p| {
+        // all points should be in bounds
+        const in_bounds = (0 <= p[0] and p[0] <= 1) and (0 <= p[1] and p[1] <= 1);
+        try testing.expect(in_bounds);
+        found_left = found_left or p[0] < 0.333;
+        found_right = found_right or p[0] > 0.667;
+        found_low = found_low or p[1] < 0.333;
+        found_high = found_high or p[1] > 0.667;
+    }
+    // extremely unlikely that points won't be found near each boundary
+    try testing.expect(found_left);
+    try testing.expect(found_right);
+    try testing.expect(found_low);
+    try testing.expect(found_high);
+}
+
+test "midline" {
+    const pts: [2]vec2f = [_]vec2f{ [_]f32{ 1.0, 1.0 }, [_]f32{ 2.0, 1.0 } };
+
+    const l = getEquidistantLine(pts[0], pts[1]).?;
+    const dir_inner_prod: f32 = innerProduct([_]f32{ 0.0, 1.0 }, l.direction);
+    const normal_diff: f32 = euclideanNorm2([_]f32{ -1.0, 0.0 } - l.normal);
+    const midpoint_diff: f32 = euclideanNorm2([_]f32{ 1.5, 1.0 } - l.point);
+    try testing.expectApproxEqRel(1.0, @abs(dir_inner_prod), tolerance);
+    try testing.expectApproxEqRel(0.0, normal_diff, tolerance);
+    try testing.expectApproxEqRel(0.0, midpoint_diff, tolerance);
+}
+
+test "displacement 1" {
+    const dir: vec2f = [_]f32{ 1.0, 0.0 };
+    const norm: vec2f = [_]f32{ 0.0, 1.0 };
+    const point: vec2f = [_]f32{ 0.0, 0.0 };
+    const l = Line{ .point = point, .direction = dir, .normal = norm };
+    const p1: vec2f = [_]f32{ 0.0, 2.0 };
+    const p2: vec2f = [_]f32{ 5.0, 2.0 };
+    const disp_1 = l.getDisplacement(p1);
+    const disp_2 = l.getDisplacement(p2);
+    const expected_disp: f32 = 2.0;
+    try testing.expectApproxEqRel(expected_disp, disp_1, tolerance);
+    try testing.expectApproxEqRel(expected_disp, disp_2, tolerance);
+}
+
+test "displacement 2" {
+    const dir: vec2f = [_]f32{ -2.0 / @sqrt(5.0), 1.0 / @sqrt(5.0) };
+    const norm: vec2f = [_]f32{ 1.0 / @sqrt(5.0), 2.0 / @sqrt(5.0) };
+    const point: vec2f = [_]f32{ 0.0, -1.0 };
+    const l = Line{ .point = point, .direction = dir, .normal = norm };
+    const p1: vec2f = [_]f32{ 1.0, 1.0 };
+    const p2: vec2f = [_]f32{ -3.0, 3.0 };
+    const disp_1 = l.getDisplacement(p1);
+    const disp_2 = l.getDisplacement(p2);
+    const expected_dist: f32 = @sqrt(5.0);
+    try testing.expectApproxEqAbs(expected_dist, disp_1, tolerance);
+    try testing.expectApproxEqAbs(expected_dist, disp_2, tolerance);
+}
+
+test "intersection" {
+    const line_a = getConnectingLine([_]f32{ -2.0, 1.0 }, [_]f32{ 10.0, 1.0 }).?;
+    const line_b = getConnectingLine([_]f32{ -1.0, 0.0 }, [_]f32{ 3.0, 4.0 }).?;
+    const expected_int: vec2f = [_]f32{ 0.0, 1.0 };
+    const actual_int = getIntersection(line_a, line_b);
+    try testing.expectApproxEqAbs(expected_int[0], actual_int[0], tolerance);
+    try testing.expectApproxEqAbs(expected_int[1], actual_int[1], tolerance);
+}
+
+test "intersection perf." {
+    // kind of silly to test performance in a test - better to do it in a program that can be run with performance optimisations enabled
+    const num_iters = 10_000_000;
+    const num_pts = 10;
+    const pts = try genRandomPoints(testing.allocator, num_pts, rng_seed);
+    defer testing.allocator.free(pts);
+    var lines: [num_pts]Line = undefined;
+    for (0..num_pts) |i| {
+        const j = (i + 1) % num_pts; // wraps to 0
+        lines[i] = getEquidistantLine(pts[i], pts[j]).?;
+    }
+    const t0 = time.milliTimestamp();
+    for (0..num_iters) |i| {
+        const ln1 = lines[i % num_pts];
+        const ln2 = lines[(i + 1) % num_pts];
+        _ = getIntersection(ln1, ln2);
+    }
+    const t1 = time.milliTimestamp();
+    std.debug.print("\n {} intersections (method 1) took {} ms\n", .{ num_iters, t1 - t0 });
 }
