@@ -49,7 +49,7 @@ pub fn getEquidistantLine(a: vec2f, b: vec2f) ?Line {
 
 /// Uses basic algebra to find the intersection of two lines (equivalent to the determinant method, but faster)
 pub fn getIntersection(a: Line, b: Line) vec2f {
-    const i: u1 = if (math.fabs(a.direction[1]) > math.fabs(a.direction[0])) 1 else 0;
+    const i: u1 = if (@abs(a.direction[1]) > @abs(a.direction[0])) 1 else 0;
     const j: u1 = i +% 1; // TODO: test performance vs. more conventional way (i.e., make i & j u8s and use an if-else expression)
     const rji = a.direction[j] / a.direction[i];
     const denom = (b.direction[j] - rji * b.direction[i]);
