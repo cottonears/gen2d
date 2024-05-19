@@ -1,9 +1,0 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0"/>    
-</head>
-<body>
-    <polygon points=\"50,0 20,50 80,50 65,80 35,80\" fill=\"#ADD8E6\"/>
-</body>
-</html>
