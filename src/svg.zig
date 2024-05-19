@@ -2,16 +2,18 @@ const std = @import("std");
 const math = std.math;
 const mem = std.mem;
 
+pub const vec2f = @Vector(2, f32);
+
 pub const Canvas = struct {
     height: f32,
     width: f32,
     //background: [3]u8,
     str: std.ArrayList(u8),
 
-    pub fn init(w: f32, h: f32, allocator: mem.Allocator) Canvas {
+    pub fn init(allocator: mem.Allocator, width: f32, height: f32) Canvas {
         return Canvas{
-            .height = h,
-            .width = w,
+            .height = height,
+            .width = width,
             .str = std.ArrayList(u8).init(allocator),
         };
     }
@@ -20,41 +22,54 @@ pub const Canvas = struct {
         self.str.deinit();
     }
 
-    // TODO 1: add fill
-    // TODO 2: can this be generalised for inline elements
-    pub fn addCircle(self: *Canvas, cx: f32, cy: f32, r: f32) !void {
-        var buff: [100]u8 = undefined;
-        const buff_slice = buff[0..];
-        const insert_str = try std.fmt.bufPrint(
-            buff_slice,
-            "\n<circle cx=\"{d:.3}\" cy=\"{d:.3}\" r=\"{d:.3}\" fill=\"red\"/>",
-            .{ cx, cy, r },
+    // TODO: add style
+    pub fn addCircle(self: *Canvas, allocator: mem.Allocator, centre: vec2f, radius: f32) !void {
+        const element_str = try std.fmt.allocPrint(
+            allocator,
+            "\n<circle cx=\"{d:.3}\" cy=\"{d:.3}\" r=\"{d:.3}\" fill=\"black\"/>",
+            .{ centre[0], centre[1], radius },
         );
+        defer allocator.free(element_str);
+        try self.str.appendSlice(element_str);
+    }
 
-        try self.str.appendSlice(insert_str);
+    pub fn addPolygon(self: *Canvas, allocator: mem.Allocator, points: []vec2f) !void {
+        var pts_list = std.ArrayList(u8).init(allocator);
+        defer pts_list.deinit();
+        for (points) |p| {
+            var buff: [24]u8 = undefined;
+            const slice = buff[0..];
+            const str = try std.fmt.bufPrint(slice, "{d:.3},{d:.3} ", .{ p[0], p[1] });
+            try pts_list.appendSlice(str);
+        }
+        const element_str = try std.fmt.allocPrint(
+            allocator,
+            "\n<polygon points=\"{s}\" style=\"fill:lime;stroke:purple;stroke-width:3\" />",
+            .{pts_list.items[0..]},
+        );
+        defer allocator.free(element_str);
+        try self.str.appendSlice(element_str);
     }
 
     // caller owns the returned memory
     pub fn getSvg(self: *const Canvas, allocator: mem.Allocator) ![]u8 {
-        var buff: [96]u8 = undefined;
-        const buff_slice = buff[0..];
-        const svg_start = try std.fmt.bufPrint(
-            buff_slice,
+        const svg_start = try std.fmt.allocPrint(
+            allocator,
             "<svg width=\"{d:.3}\" height=\"{d:.3}\" xmlns=\"http://www.w3.org/2000/svg\">",
             .{ self.width, self.height },
         );
-        const svg_end = "</svg>";
+        defer allocator.free(svg_start);
 
         var text = std.ArrayList(u8).init(allocator);
         //errdefer allocator.free(text); ???
         try text.appendSlice(svg_start);
         try text.appendSlice(self.str.items);
-        try text.appendSlice(svg_end);
+        try text.appendSlice("</svg>");
 
         return text.toOwnedSlice();
     }
 
-    pub fn writeHtml(self: *const Canvas, filename: []const u8, allocator: mem.Allocator) !void {
+    pub fn writeHtml(self: *const Canvas, allocator: mem.Allocator, filename: []const u8) !void {
         const html_start = "<!DOCTYPE html>\n<html><body>";
         const html_end = "</body></html>";
         const svg_body = try self.getSvg(allocator);
@@ -75,8 +90,14 @@ const testing = std.testing;
 
 test "test write html" {
     // create a canvas and paint it
-    var canvas = Canvas.init(1000.0, 500, testing.allocator);
+    var points: [3]vec2f = [_]vec2f{
+        [_]f32{ 300, 400 },
+        [_]f32{ 500, 600 },
+        [_]f32{ 400, 450 },
+    };
+    var canvas = Canvas.init(testing.allocator, 1000.0, 1000.0);
     defer canvas.deinit();
-    try canvas.addCircle(200, 200, 10.0);
-    try canvas.writeHtml("test_svg.html", testing.allocator);
+    try canvas.addPolygon(testing.allocator, points[0..]);
+    try canvas.addCircle(testing.allocator, [_]f32{ 400, 500 }, 10.0);
+    try canvas.writeHtml(testing.allocator, "test_svg.html");
 }

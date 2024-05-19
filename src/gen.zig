@@ -1,5 +1,6 @@
 const std = @import("std");
 const la = @import("la.zig");
+const svg = @import("svg.zig");
 const math = std.math;
 const mem = std.mem;
 const vec2f = la.vec2f;
@@ -102,7 +103,7 @@ pub fn genVoronoiCell(allocator: mem.Allocator, a: vec2f, other_pts: []vec2f) ![
 const testing = std.testing;
 
 test "voronoi lines 1" {
-    const pts = try la.genRandomPoints(testing.allocator, 2, 0);
+    const pts = try la.genRandomPoints(testing.allocator, 2, 0, 1000, 1000);
     defer testing.allocator.free(pts);
     for (pts, 0..) |p, i| {
         std.debug.print("\n{}. ({d:.3}, {d:.3})", .{ i + 1, p[0], p[1] });
@@ -129,25 +130,17 @@ test "voronoi cells 1 pt" {
     std.debug.print("\nDone!\n", .{});
 }
 
-test "voronoi cells 8 pts" {
-    const pts = try la.genRandomPoints(testing.allocator, 8, 89);
+test "voronoi cells 5 pts" {
+    const pts = try la.genRandomPoints(testing.allocator, 5, 89, 1000, 1000);
     defer testing.allocator.free(pts);
-    std.debug.print("\nCell nuclei:\n", .{});
-    for (pts) |p| std.debug.print("({d:.3}, {d:.3})\n", .{ p[0], p[1] });
+    var canvas = svg.Canvas.init(testing.allocator, 1000, 1000);
+    defer canvas.deinit();
 
-    // vertex 0
     const cell_verts = try genVoronoiCell(testing.allocator, pts[0], pts[1..]);
     defer testing.allocator.free(cell_verts);
-    std.debug.print("\nCell vertices:\n", .{});
-    for (cell_verts, 0..) |c, j| {
-        std.debug.print("\n{}. ({d:.3}, {d:.3})", .{ j, c[0], c[1] });
-    }
+    try canvas.addPolygon(testing.allocator, cell_verts);
+    for (pts) |p| try canvas.addCircle(testing.allocator, p, 5);
 
+    try canvas.writeHtml(testing.allocator, "test_voronoi.html");
     std.debug.print("\nDone!\n", .{});
-
-    // what are we trying to do in general here?
-    // I think when we have std.debug.print("\n{}. ({d:.3}, {d:.3})"
-    // this is a display strategy
-    // we want to do something similar to convert this into svg text
-    // we kinda want polymorphic behaviour
 }

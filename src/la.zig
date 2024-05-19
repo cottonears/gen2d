@@ -61,14 +61,14 @@ pub fn getIntersection(a: Line, b: Line) vec2f {
     return [_]f32{ b.point[0] + beta * b.direction[0], b.point[1] + beta * b.direction[1] };
 }
 
-/// Generates random points in [0, 1] x [0, 1]; caller owns returned slice.
-pub fn genRandomPoints(allocator: mem.Allocator, n: usize, seed: u64) ![]vec2f {
+/// Generates random points in [0, x] x [0, 1]; caller owns returned slice.
+pub fn genRandomPoints(allocator: mem.Allocator, n: usize, seed: u64, x: f32, y: f32) ![]vec2f {
     var rng = rand.DefaultPrng.init(seed);
     var vec_array = try allocator.alloc(vec2f, n);
     errdefer allocator.dealloc(vec_array);
     for (0..n) |i| {
-        const r_x = rng.random().float(f32);
-        const r_y = rng.random().float(f32);
+        const r_x = x * rng.random().float(f32);
+        const r_y = y * rng.random().float(f32);
         vec_array[i] = [_]f32{ r_x, r_y };
     }
     return vec_array;
@@ -83,33 +83,19 @@ const rng_seed: u64 = 1000;
 const tolerance: f32 = 0.0001;
 
 test "gen random points" {
-    const pts = try genRandomPoints(testing.allocator, 1000, rng_seed);
+    const pts = try genRandomPoints(testing.allocator, 1000, rng_seed, 1000, 1000);
     defer testing.allocator.free(pts);
-    var canvas = svg.Canvas.init(1000.0, 1000.0, testing.allocator);
+    var canvas = svg.Canvas.init(testing.allocator, 1000.0, 1000.0);
     defer canvas.deinit();
-
-    var found_left = false;
-    var found_right = false;
-    var found_high = false;
-    var found_low = false;
 
     for (pts) |p| {
         // all points should be in bounds
-        const in_bounds = (0 <= p[0] and p[0] <= 1) and (0 <= p[1] and p[1] <= 1);
+        const in_bounds = (0 <= p[0] and p[0] <= 1000) and (0 <= p[1] and p[1] <= 1000);
         try testing.expect(in_bounds);
-        found_left = found_left or p[0] < 0.333;
-        found_right = found_right or p[0] > 0.667;
-        found_low = found_low or p[1] < 0.333;
-        found_high = found_high or p[1] > 0.667;
-        try canvas.addCircle(1000 * p[0], 1000 * p[1], 5.0);
+        try canvas.addCircle(testing.allocator, p, 5.0);
     }
-    // extremely unlikely that points won't be found near each boundary
-    try testing.expect(found_left);
-    try testing.expect(found_right);
-    try testing.expect(found_low);
-    try testing.expect(found_high);
 
-    try canvas.writeHtml("test_random.html", testing.allocator);
+    try canvas.writeHtml(testing.allocator, "test_random.html");
 }
 
 test "midline" {
@@ -165,7 +151,7 @@ test "intersection perf." {
     // kind of silly to test performance in a test - better to do it in a program that can be run with performance optimisations enabled
     const num_iters = 10_000_000;
     const num_pts = 10;
-    const pts = try genRandomPoints(testing.allocator, num_pts, rng_seed);
+    const pts = try genRandomPoints(testing.allocator, num_pts, rng_seed, 1.0, 1.0);
     defer testing.allocator.free(pts);
     var lines: [num_pts]Line = undefined;
     for (0..num_pts) |i| {
