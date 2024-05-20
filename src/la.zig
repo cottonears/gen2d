@@ -147,23 +147,23 @@ test "intersection" {
     try testing.expectApproxEqAbs(expected_int[1], actual_int[1], tolerance);
 }
 
-test "intersection perf." {
-    // kind of silly to test performance in a test - better to do it in a program that can be run with performance optimisations enabled
-    const num_iters = 10_000_000;
-    const num_pts = 10;
-    const pts = try genRandomPoints(testing.allocator, num_pts, rng_seed, 1.0, 1.0);
-    defer testing.allocator.free(pts);
-    var lines: [num_pts]Line = undefined;
-    for (0..num_pts) |i| {
-        const j = (i + 1) % num_pts; // wraps to 0
-        lines[i] = getEquidistantLine(pts[i], pts[j]).?;
-    }
-    const t0 = time.milliTimestamp();
-    for (0..num_iters) |i| {
-        const ln1 = lines[i % num_pts];
-        const ln2 = lines[(i + 1) % num_pts];
-        _ = getIntersection(ln1, ln2);
-    }
-    const t1 = time.milliTimestamp();
-    std.debug.print("\n {} intersections (method 1) took {} ms\n", .{ num_iters, t1 - t0 });
-}
+// test "intersection perf." {
+//     // kind of silly to test performance in a test - better to do it in a program that can be run with performance optimisations enabled
+//     const num_iters = 10_000_000;
+//     const num_pts = 10;
+//     const pts = try genRandomPoints(testing.allocator, num_pts, rng_seed, 1.0, 1.0);
+//     defer testing.allocator.free(pts);
+//     var lines: [num_pts]Line = undefined;
+//     for (0..num_pts) |i| {
+//         const j = (i + 1) % num_pts; // wraps to 0
+//         lines[i] = getEquidistantLine(pts[i], pts[j]).?;
+//     }
+//     const t0 = time.milliTimestamp();
+//     for (0..num_iters) |i| {
+//         const ln1 = lines[i % num_pts];
+//         const ln2 = lines[(i + 1) % num_pts];
+//         _ = getIntersection(ln1, ln2);
+//     }
+//     const t1 = time.milliTimestamp();
+//     std.debug.print("\n {} intersections (method 1) took {} ms\n", .{ num_iters, t1 - t0 });
+// }
