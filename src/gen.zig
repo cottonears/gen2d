@@ -39,11 +39,14 @@ const frame_lines = [_]Line{
     },
 };
 
-/// gets a collection of equidistant lines
-pub fn getPotentialBoundaryLines(allocator: mem.Allocator, a: vec2f, other_pts: []vec2f) ![]LineWithDist {
+/// gets a collection of lines containing:
+/// - one line that is equidistant between the indexed point and each other point
+/// - four 'frame lines' at the boundaries
+pub fn getPotentialBoundaryLines(allocator: mem.Allocator, points: []vec2f, index: usize) ![]LineWithDist {
     var eqd_lines = std.ArrayList(LineWithDist).init(allocator);
     defer eqd_lines.deinit();
-    for (other_pts) |p| {
+    const a = points[index];
+    for (points) |p| {
         const el = la.getEquidistantLine(a, p);
         if (el != null) {
             const ld = LineWithDist{ .line = el.?, .dist = el.?.getDisplacement(a) };
@@ -61,16 +64,17 @@ pub fn getPotentialBoundaryLines(allocator: mem.Allocator, a: vec2f, other_pts: 
     return eqd_lines.toOwnedSlice();
 }
 
-// aim is to construct a bubble around a whose points are slightly closer to a than the voronoi boundary
-pub fn genInjeraCell(allocator: mem.Allocator, a: vec2f, other_pts: []vec2f, n: u8) ![]vec2f {
-    const potential_boundaries = try getPotentialBoundaryLines(allocator, a, other_pts);
+// gets vertices forming a 'bubble' around the indexed point
+pub fn genInjeraCell(allocator: mem.Allocator, points: []vec2f, index: usize, n: u16) ![]vec2f {
+    const potential_boundaries = try getPotentialBoundaryLines(allocator, points, index);
     defer allocator.free(potential_boundaries);
     var cell_verts = std.ArrayList(vec2f).init(allocator);
     defer cell_verts.deinit();
+    const a = points[index];
 
     for (1..n) |i| {
-        const angle = 6.2832 / @as(f32, @floatFromInt(i));
-        var closest_disp = std.math.floatMax(f32);
+        const angle = 6.2832 * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n));
+        var closest_dist = std.math.floatMax(f32);
         var closest_intercept: ?vec2f = null;
         for (potential_boundaries) |bound| {
             // optimisation idea: if bound is further than closest intersect, ignore it
@@ -78,17 +82,17 @@ pub fn genInjeraCell(allocator: mem.Allocator, a: vec2f, other_pts: []vec2f, n: 
             const ray = Line.init(a, dir);
             const intersect = la.getIntersection(ray, bound.line);
             const intersect_disp = la.innerProduct(intersect - a, dir);
-            if (0.0 < intersect_disp and intersect_disp < closest_disp) {
-                closest_disp = intersect_disp;
+            if (0.0 < intersect_disp and intersect_disp < closest_dist) {
+                closest_dist = intersect_disp;
                 closest_intercept = intersect;
             }
         }
         if (closest_intercept != null) {
             try cell_verts.append(closest_intercept.?);
-            std.debug.print(
-                "\n{any}. closest point = ({d:.3}, {d:.3}), displacement = {d:.3} ",
-                .{ i, closest_intercept.?[0], closest_intercept.?[1], closest_disp },
-            );
+            // std.debug.print(
+            //     "\nangle = {d:.3}, dist = {d:.3}, intercept = ({d:.3}{d:.3})",
+            //     .{ angle, closest_dist, closest_intercept.?[0], closest_intercept.?[1] },
+            // );
         }
     }
 
@@ -103,7 +107,7 @@ test "boundary lines 1" {
     for (pts, 0..) |p, i| {
         std.debug.print("\n{}. ({d:.3}, {d:.3})", .{ i + 1, p[0], p[1] });
     }
-    const cell_lines = try getPotentialBoundaryLines(testing.allocator, pts[0], pts[1..]);
+    const cell_lines = try getPotentialBoundaryLines(testing.allocator, pts, 0);
     defer testing.allocator.free(cell_lines);
     std.debug.print("\ncell lines for {}:\n", .{0});
     for (cell_lines) |c| {
@@ -112,17 +116,19 @@ test "boundary lines 1" {
     std.debug.print("\nDone!\n", .{});
 }
 
-test "injera cells 2 pts" {
-    const pts = try la.genRandomPoints(testing.allocator, 2, 0, 1000, 1000);
+test "injera cells 15 pts" {
+    const pts = try la.genRandomPoints(testing.allocator, 15, 0, 1000, 1000);
     defer testing.allocator.free(pts);
     var canvas = svg.Canvas.init(testing.allocator, 1000, 1000);
     defer canvas.deinit();
 
-    const cell_verts = try genInjeraCell(testing.allocator, pts[0], pts[1..], 8);
-    defer testing.allocator.free(cell_verts);
-    try canvas.addPolygon(testing.allocator, cell_verts);
-    for (pts) |p| try canvas.addCircle(testing.allocator, p, 5);
+    for (0..15) |i| {
+        const cell_verts = try genInjeraCell(testing.allocator, pts, i, 8);
+        defer testing.allocator.free(cell_verts);
+        try canvas.addPolygon(testing.allocator, cell_verts);
+        try canvas.addCircle(testing.allocator, pts[i], 5);
+    }
 
-    try canvas.writeHtml(testing.allocator, "test_voronoi.html");
+    try canvas.writeHtml(testing.allocator, "test_injera.html");
     std.debug.print("\nDone!\n", .{});
 }
