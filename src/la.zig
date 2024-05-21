@@ -61,7 +61,7 @@ pub fn getIntersection(a: Line, b: Line) vec2f {
     return [_]f32{ b.point[0] + beta * b.direction[0], b.point[1] + beta * b.direction[1] };
 }
 
-/// Generates random points in [0, x] x [0, 1]; caller owns returned slice.
+/// Generates random points in [0, x] cross [0, y]; caller owns returned slice.
 pub fn genRandomPoints(allocator: mem.Allocator, n: usize, seed: u64, x: f32, y: f32) ![]vec2f {
     var rng = rand.DefaultPrng.init(seed);
     var vec_array = try allocator.alloc(vec2f, n);
@@ -79,18 +79,19 @@ pub fn genRandomPoints(allocator: mem.Allocator, n: usize, seed: u64, x: f32, y:
 //
 const testing = std.testing;
 const time = std.time;
-const rng_seed: u64 = 1000;
+const rng_seed: u64 = 42;
+const canvas_size: f32 = 1000.0;
 const tolerance: f32 = 0.0001;
 
 test "gen random points" {
-    const pts = try genRandomPoints(testing.allocator, 1000, rng_seed, 1000, 1000);
+    const pts = try genRandomPoints(testing.allocator, 100, rng_seed, canvas_size, canvas_size);
     defer testing.allocator.free(pts);
-    var canvas = svg.Canvas.init(testing.allocator, 1000.0, 1000.0);
+    var canvas = svg.Canvas.init(testing.allocator, canvas_size, canvas_size);
     defer canvas.deinit();
 
     for (pts) |p| {
         // all points should be in bounds
-        const in_bounds = (0 <= p[0] and p[0] <= 1000) and (0 <= p[1] and p[1] <= 1000);
+        const in_bounds = (0 <= p[0] and p[0] <= canvas_size) and (0 <= p[1] and p[1] <= canvas_size);
         try testing.expect(in_bounds);
         try canvas.addCircle(testing.allocator, p, 5.0);
     }

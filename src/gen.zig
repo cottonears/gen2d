@@ -89,10 +89,8 @@ pub fn genInjeraCell(allocator: mem.Allocator, points: []vec2f, index: usize, n:
         }
         if (closest_intercept != null) {
             try cell_verts.append(closest_intercept.?);
-            // std.debug.print(
-            //     "\nangle = {d:.3}, dist = {d:.3}, intercept = ({d:.3}{d:.3})",
-            //     .{ angle, closest_dist, closest_intercept.?[0], closest_intercept.?[1] },
-            // );
+        } else {
+            std.debug.print("couldn't find intersect for point {any} at angle {d:.3} rad", .{ index, angle });
         }
     }
 
@@ -100,9 +98,10 @@ pub fn genInjeraCell(allocator: mem.Allocator, points: []vec2f, index: usize, n:
 }
 
 const testing = std.testing;
+const canvas_size: f32 = 1000.0;
 
 test "boundary lines 1" {
-    const pts = try la.genRandomPoints(testing.allocator, 1, 0, 1000, 1000);
+    const pts = try la.genRandomPoints(testing.allocator, 1, 0, canvas_size, canvas_size);
     defer testing.allocator.free(pts);
     for (pts, 0..) |p, i| {
         std.debug.print("\n{}. ({d:.3}, {d:.3})", .{ i + 1, p[0], p[1] });
@@ -114,16 +113,20 @@ test "boundary lines 1" {
         std.debug.print("point = ({d:.3}, {d:.3}); dir = ({d:.3}, {d:.3})\n", .{ c.line.point[0], c.line.point[1], c.line.direction[0], c.line.direction[1] });
     }
     std.debug.print("\nDone!\n", .{});
+    // TODO: draw this!
 }
 
-test "injera cells 15 pts" {
-    const pts = try la.genRandomPoints(testing.allocator, 15, 0, 1000, 1000);
+test "injera cells 400 pts" {
+    const num_pts = 4000;
+    const num_verts = 60;
+    const rng_seed = 9000;
+    const pts = try la.genRandomPoints(testing.allocator, num_pts, rng_seed, canvas_size, canvas_size);
     defer testing.allocator.free(pts);
-    var canvas = svg.Canvas.init(testing.allocator, 1000, 1000);
+    var canvas = svg.Canvas.init(testing.allocator, canvas_size, canvas_size);
     defer canvas.deinit();
 
-    for (0..15) |i| {
-        const cell_verts = try genInjeraCell(testing.allocator, pts, i, 8);
+    for (0..num_pts) |i| {
+        const cell_verts = try genInjeraCell(testing.allocator, pts, i, num_verts);
         defer testing.allocator.free(cell_verts);
         try canvas.addPolygon(testing.allocator, cell_verts);
         try canvas.addCircle(testing.allocator, pts[i], 5);

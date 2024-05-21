@@ -4,26 +4,42 @@ const mem = std.mem;
 
 pub const vec2f = @Vector(2, f32);
 
+// TODO: add support for lines
 pub const Canvas = struct {
     height: f32,
     width: f32,
     //background: [3]u8,
     str: std.ArrayList(u8),
+    rng: std.Random.Xoshiro256,
 
     pub fn init(allocator: mem.Allocator, width: f32, height: f32) Canvas {
         return Canvas{
             .height = height,
             .width = width,
             .str = std.ArrayList(u8).init(allocator),
+            .rng = std.rand.DefaultPrng.init(0),
         };
     }
 
     pub fn deinit(self: *Canvas) void {
         self.str.deinit();
+        //self.rng.deinit();
+    }
+
+    pub fn getRandomHslTriple(self: *Canvas, buffer: []u8, h_min: f32, h_max: f32, s_min: f32, s_max: f32, l_min: f32, l_max: f32) ![]u8 {
+        const h = h_min + (h_max - h_min) * self.rng.random().float(f32);
+        const s = s_min + (s_max - s_min) * self.rng.random().float(f32);
+        const l = l_min + (l_max - l_min) * self.rng.random().float(f32);
+        // TODO 21 May: investigate below situation
+        // There was a bug here previously when the buffer was declared with a local identifier inside this function.
+        // I think this may have been freed (does that even make sense for stack-allocated memory?!) prematurely after the function was called?
+        // When the string was printed in the calling function, it was complete gibberish.
+        return try std.fmt.bufPrint(buffer, "hsl({d:.0},{d:.0}%,{d:.0}%)", .{ h, s, l });
     }
 
     // TODO: add style
     pub fn addCircle(self: *Canvas, allocator: mem.Allocator, centre: vec2f, radius: f32) !void {
+        //const hsl = getRandomColour(0, 360, 0, 100, 0, 100);
         const element_str = try std.fmt.allocPrint(
             allocator,
             "\n<circle cx=\"{d:.3}\" cy=\"{d:.3}\" r=\"{d:.3}\" fill=\"black\"/>",
@@ -42,10 +58,13 @@ pub const Canvas = struct {
             const str = try std.fmt.bufPrint(slice, "{d:.3},{d:.3} ", .{ p[0], p[1] });
             try pts_list.appendSlice(str);
         }
+
+        var buffer: [24]u8 = undefined;
+        const hsl = try self.getRandomHslTriple(&buffer, 100, 200, 20, 80, 60, 80);
         const element_str = try std.fmt.allocPrint(
             allocator,
-            "\n<polygon points=\"{s}\" style=\"fill:lime;stroke:purple;stroke-width:3\" />",
-            .{pts_list.items[0..]},
+            "\n<polygon points=\"{s}\" style=\"fill:{s}; stroke:grey; stroke-width:2\" />",
+            .{ pts_list.items[0..], hsl },
         );
         defer allocator.free(element_str);
         try self.str.appendSlice(element_str);
@@ -87,6 +106,8 @@ pub const Canvas = struct {
 // svg tests
 //
 const testing = std.testing;
+const canvas_width: f32 = 800;
+const canvas_height: f32 = 600;
 
 test "test write html" {
     // create a canvas and paint it
@@ -95,7 +116,7 @@ test "test write html" {
         [_]f32{ 500, 600 },
         [_]f32{ 400, 450 },
     };
-    var canvas = Canvas.init(testing.allocator, 1000.0, 1000.0);
+    var canvas = Canvas.init(testing.allocator, canvas_width, canvas_height);
     defer canvas.deinit();
     try canvas.addPolygon(testing.allocator, points[0..]);
     try canvas.addCircle(testing.allocator, [_]f32{ 400, 500 }, 10.0);
