@@ -8,33 +8,19 @@ pub const vec2f = @Vector(2, f32);
 pub const Canvas = struct {
     height: f32,
     width: f32,
-    //background: [3]u8,
     str: std.ArrayList(u8),
-    rng: std.Random.Xoshiro256,
+    //background: [3]u8,
 
     pub fn init(allocator: mem.Allocator, width: f32, height: f32) Canvas {
         return Canvas{
             .height = height,
             .width = width,
             .str = std.ArrayList(u8).init(allocator),
-            .rng = std.rand.DefaultPrng.init(0),
         };
     }
 
     pub fn deinit(self: *Canvas) void {
         self.str.deinit();
-        //self.rng.deinit();
-    }
-
-    pub fn getRandomHslTriple(self: *Canvas, buffer: []u8, h_min: f32, h_max: f32, s_min: f32, s_max: f32, l_min: f32, l_max: f32) ![]u8 {
-        const h = h_min + (h_max - h_min) * self.rng.random().float(f32);
-        const s = s_min + (s_max - s_min) * self.rng.random().float(f32);
-        const l = l_min + (l_max - l_min) * self.rng.random().float(f32);
-        // TODO 21 May: investigate below situation
-        // There was a bug here previously when the buffer was declared with a local identifier inside this function.
-        // I think this may have been freed (does that even make sense for stack-allocated memory?!) prematurely after the function was called?
-        // When the string was printed in the calling function, it was complete gibberish.
-        return try std.fmt.bufPrint(buffer, "hsl({d:.0},{d:.0}%,{d:.0}%)", .{ h, s, l });
     }
 
     // TODO: add style
