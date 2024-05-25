@@ -12,23 +12,28 @@ pub const RandomHslPalette = struct {
     l_max: u7 = 100,
     rng: std.rand.DefaultPrng,
 
-    pub fn init(seed: usize, h_min: ?u9, h_max: ?u9, s_min: ?u7, s_max: ?u7, l_min: ?u7, l_max: ?u7) !RandomHslPalette {
+    pub fn init(seed: usize) !RandomHslPalette {
         return RandomHslPalette{
             .rng = std.rand.DefaultPrng.init(seed),
         };
     }
 
-    pub fn getRandomHslTriple(buffer: []u8) ![]u8 {
+    pub fn getRandomHslTriple(self: *RandomHslPalette, buffer: []u8) ![]u8 {
         // TODO: update to generate random integers
-        const h = h_min + (h_max - h_min) * self.rng.random().float(f32);
-        const s = s_min + (s_max - s_min) * self.rng.random().float(f32);
-        const l = l_min + (l_max - l_min) * self.rng.random().float(f32);
+        const h = self.h_min + self.rng.random().int(u9)%(self.h_max - self.h_min);
+        const s = self.s_min + self.rng.random().int(u7)%(self.s_max - self.s_min);
+        const l = self.l_min + self.rng.random().int(u7)%(self.l_max - self.l_min);
         return try std.fmt.bufPrint(buffer, "hsl({d:.0},{d:.0}%,{d:.0}%)", .{ h, s, l });
     }
 };
 
-test "default palette" {
-    // get the default palette and generate some colours!
+test "default palette" {    
+    var mypal = try RandomHslPalette.init(0);
+    var buff: [32]u8 = undefined;  
+    for (0..10)|i|{
+        const hsl = try mypal.getRandomHslTriple(&buff);
+        std.debug.print("{}. {s}\n", .{i, hsl});
+    }
 }
 
 test "test errors" {
