@@ -1,10 +1,14 @@
 const std = @import("std");
+const colour = @import("colour.zig");
 const math = std.math;
 const mem = std.mem;
 
-pub const vec2f = @Vector(2, f32);
+const vec2f = @Vector(2, f32);
 
-// TODO: add support for lines
+// TODO: add support for:
+// - custom backgrounds
+// - lines
+// - styles
 pub const Canvas = struct {
     height: f32,
     width: f32,
@@ -22,10 +26,8 @@ pub const Canvas = struct {
     pub fn deinit(self: *Canvas) void {
         self.str.deinit();
     }
-
-    // TODO: add style
-    pub fn addCircle(self: *Canvas, allocator: mem.Allocator, centre: vec2f, radius: f32) !void {
-        //const hsl = getRandomColour(0, 360, 0, 100, 0, 100);
+    
+    pub fn addCircle(self: *Canvas, allocator: mem.Allocator, centre: vec2f, radius: f32) !void {        
         const element_str = try std.fmt.allocPrint(
             allocator,
             "\n<circle cx=\"{d:.3}\" cy=\"{d:.3}\" r=\"{d:.3}\" fill=\"black\"/>",
@@ -35,22 +37,20 @@ pub const Canvas = struct {
         try self.str.appendSlice(element_str);
     }
 
-    pub fn addPolygon(self: *Canvas, allocator: mem.Allocator, points: []vec2f) !void {
+    pub fn addPolygon(self: *Canvas, allocator: mem.Allocator, points: []vec2f, fill: []u8) !void {
         var pts_list = std.ArrayList(u8).init(allocator);
         defer pts_list.deinit();
         for (points) |p| {
-            var buff: [24]u8 = undefined;
+            var buff: [32]u8 = undefined;
             const slice = buff[0..];
             const str = try std.fmt.bufPrint(slice, "{d:.3},{d:.3} ", .{ p[0], p[1] });
             try pts_list.appendSlice(str);
         }
-
-        var buffer: [24]u8 = undefined;
-        const hsl = try self.getRandomHslTriple(&buffer, 100, 200, 20, 80, 60, 80);
+        
         const element_str = try std.fmt.allocPrint(
             allocator,
             "\n<polygon points=\"{s}\" style=\"fill:{s}; stroke:grey; stroke-width:2\" />",
-            .{ pts_list.items[0..], hsl },
+            .{ pts_list.items[0..], fill },
         );
         defer allocator.free(element_str);
         try self.str.appendSlice(element_str);
@@ -103,8 +103,11 @@ test "test write html" {
         [_]f32{ 400, 450 },
     };
     var canvas = Canvas.init(testing.allocator, canvas_width, canvas_height);
+    var palette = try colour.RandomHslPalette.init(11);    
+    var buff : [32]u8 = undefined;
+    const fill = try palette.getRandomColour(&buff);
     defer canvas.deinit();
-    try canvas.addPolygon(testing.allocator, points[0..]);
+    try canvas.addPolygon(testing.allocator, points[0..], fill);
     try canvas.addCircle(testing.allocator, [_]f32{ 400, 500 }, 10.0);
     try canvas.writeHtml(testing.allocator, "test_svg.html");
 }

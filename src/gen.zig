@@ -1,6 +1,7 @@
 const std = @import("std");
 const la = @import("la.zig");
 const svg = @import("svg.zig");
+const colour = @import("colour.zig");
 const math = std.math;
 const mem = std.mem;
 const vec2f = la.vec2f;
@@ -64,41 +65,52 @@ pub fn getPotentialBoundaryLines(allocator: mem.Allocator, points: []vec2f, inde
     return eqd_lines.toOwnedSlice();
 }
 
-// gets vertices forming a 'bubble' around the indexed point
-pub fn genInjeraCell(allocator: mem.Allocator, points: []vec2f, index: usize, n: u16) ![]vec2f {
+/// gets vertices forming a 'bubble' around the indexed point
+pub fn genCell(allocator: mem.Allocator, points: []vec2f, index: usize, angle_offset: f32, num_verts: u16) ![]vec2f {
+    // first generate vertices along the boundary of the Voronoi cell (store in orig)
     const potential_boundaries = try getPotentialBoundaryLines(allocator, points, index);
     defer allocator.free(potential_boundaries);
-    var cell_verts = std.ArrayList(vec2f).init(allocator);
-    defer cell_verts.deinit();
-    const a = points[index];
-
-    for (1..n) |i| {
-        const angle = 6.2832 * @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(n));
-        var closest_dist = std.math.floatMax(f32);
-        var closest_intercept: ?vec2f = null;
+    var orig_bounds = std.ArrayList(vec2f).init(allocator); // polar coords (r, theta)
+    defer orig_bounds.deinit();
+    const centre = points[index];
+    const angle_inc = 6.2832 / @as(f32, @floatFromInt(num_verts));
+    for (0..num_verts) |i| {
+        const angle = angle_offset + @as(f32, @floatFromInt(i)) * angle_inc;
+        const dir = [_]f32{ math.cos(angle), math.sin(angle) };
+        const ray = Line.init(centre, dir);
+        var closest_dist = std.math.floatMax(f32); // for this angle/direction
         for (potential_boundaries) |bound| {
             // optimisation idea: if bound is further than closest intersect, ignore it
-            const dir = [_]f32{ math.cos(angle), math.sin(angle) };
-            const ray = Line.init(a, dir);
             const intersect = la.getIntersection(ray, bound.line);
-            const intersect_disp = la.innerProduct(intersect - a, dir);
-            if (0.0 < intersect_disp and intersect_disp < closest_dist) {
-                closest_dist = intersect_disp;
-                closest_intercept = intersect;
-            }
+            const disp = la.innerProduct(intersect - centre, dir);
+            closest_dist = if (0.0 < disp and disp < closest_dist) disp else closest_dist;
         }
-        if (closest_intercept != null) {
-            try cell_verts.append(closest_intercept.?);
+        if (closest_dist != std.math.floatMax(f32)) {
+            try orig_bounds.append([_]f32{closest_dist, angle});
         } else {
-            std.debug.print("couldn't find intersect for point {any} at angle {d:.3} rad", .{ index, angle });
+            // TODO: figure out why this is happening?
+            std.debug.print("\ncouldn't find intersect for point {} at angle {d:.3} rad", .{ index, angle });
         }
     }
-
-    return cell_verts.toOwnedSlice();
+    // next apply some scaling + filtering to the original vertices
+    // at the moment, just does some scaling of point distance
+    var final_bounds = std.ArrayList(vec2f).init(allocator); // Cartesian coords (x, y)
+    defer final_bounds.deinit();
+    for(orig_bounds.items, 0..)|point, i| {        
+        const scaled_r = 0.9 * point[0];
+        const angle = orig_bounds.items[i][1];
+        const final_vert: vec2f = [_]f32 {
+            centre[0] + scaled_r * math.cos(angle),
+            centre[1] + scaled_r * math.sin(angle),
+        };
+        try final_bounds.append(final_vert);
+    }
+    return final_bounds.toOwnedSlice();
 }
 
 const testing = std.testing;
 const canvas_size: f32 = 1000.0;
+
 
 test "boundary lines 1" {
     const pts = try la.genRandomPoints(testing.allocator, 1, 0, canvas_size, canvas_size);
@@ -116,20 +128,28 @@ test "boundary lines 1" {
     // TODO: draw this!
 }
 
-test "injera cells 400 pts" {
-    const num_pts = 4000;
-    const num_verts = 60;
+test "injera cells 500 pts" {
+    const num_pts = 500;
+    const num_verts = 50;
     const rng_seed = 9000;
+
+    var palette = try colour.RandomHslPalette.init(rng_seed);
+    try palette.setHueRange(30, 40);
+    try palette.setLightnessRange(60, 80);
+    try palette.setSaturationRange(30, 60);
+
     const pts = try la.genRandomPoints(testing.allocator, num_pts, rng_seed, canvas_size, canvas_size);
     defer testing.allocator.free(pts);
     var canvas = svg.Canvas.init(testing.allocator, canvas_size, canvas_size);
     defer canvas.deinit();
+    var col_buffer:[32]u8 = undefined;
 
     for (0..num_pts) |i| {
-        const cell_verts = try genInjeraCell(testing.allocator, pts, i, num_verts);
+        const cell_verts = try genCell(testing.allocator, pts, i, 0, num_verts);
         defer testing.allocator.free(cell_verts);
-        try canvas.addPolygon(testing.allocator, cell_verts);
-        try canvas.addCircle(testing.allocator, pts[i], 5);
+        const col = try palette.getRandomColour(&col_buffer);
+        try canvas.addPolygon(testing.allocator, cell_verts, col);
+        //try canvas.addCircle(testing.allocator, pts[i], 5);
     }
 
     try canvas.writeHtml(testing.allocator, "test_injera.html");
