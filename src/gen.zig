@@ -66,7 +66,15 @@ pub fn getPotentialBoundaryLines(allocator: mem.Allocator, points: []vec2f, inde
 }
 
 /// gets vertices forming a 'bubble' around the indexed point
-pub fn genCell(allocator: mem.Allocator, points: []vec2f, index: usize, angle_offset: f32, num_verts: u16) ![]vec2f {
+/// with r_scale = 1.0 the bubble has vertices on the boundary of the Voronoi cell around the point
+pub fn genCell(
+    allocator: mem.Allocator,
+    points: []vec2f,
+    index: usize,
+    num_verts: u16,
+    r_scale: f32,
+    angle_offset: f32,
+) ![]vec2f {
     // first generate vertices along the boundary of the Voronoi cell (store in orig)
     const potential_boundaries = try getPotentialBoundaryLines(allocator, points, index);
     defer allocator.free(potential_boundaries);
@@ -86,7 +94,7 @@ pub fn genCell(allocator: mem.Allocator, points: []vec2f, index: usize, angle_of
             closest_dist = if (0.0 < disp and disp < closest_dist) disp else closest_dist;
         }
         if (closest_dist != std.math.floatMax(f32)) {
-            try orig_bounds.append([_]f32{closest_dist, angle});
+            try orig_bounds.append([_]f32{ closest_dist, angle });
         } else {
             // TODO: figure out why this is happening?
             std.debug.print("\ncouldn't find intersect for point {} at angle {d:.3} rad", .{ index, angle });
@@ -96,10 +104,10 @@ pub fn genCell(allocator: mem.Allocator, points: []vec2f, index: usize, angle_of
     // at the moment, just does some scaling of point distance
     var final_bounds = std.ArrayList(vec2f).init(allocator); // Cartesian coords (x, y)
     defer final_bounds.deinit();
-    for(orig_bounds.items, 0..)|point, i| {        
-        const scaled_r = 0.9 * point[0];
+    for (orig_bounds.items, 0..) |point, i| {
+        const scaled_r = r_scale * point[0];
         const angle = orig_bounds.items[i][1];
-        const final_vert: vec2f = [_]f32 {
+        const final_vert: vec2f = [_]f32{
             centre[0] + scaled_r * math.cos(angle),
             centre[1] + scaled_r * math.sin(angle),
         };
@@ -110,7 +118,6 @@ pub fn genCell(allocator: mem.Allocator, points: []vec2f, index: usize, angle_of
 
 const testing = std.testing;
 const canvas_size: f32 = 1000.0;
-
 
 test "boundary lines 1" {
     const pts = try la.genRandomPoints(testing.allocator, 1, 0, canvas_size, canvas_size);
@@ -128,30 +135,58 @@ test "boundary lines 1" {
     // TODO: draw this!
 }
 
-test "injera cells 500 pts" {
+test "cells 500 pts" {
     const num_pts = 500;
-    const num_verts = 50;
-    const rng_seed = 9000;
+    const rng_seed = 9001;
+
+    var palette = try colour.RandomHslPalette.init(rng_seed);
+    try palette.setHueRange(0, 360);
+    try palette.setLightnessRange(70, 80);
+    try palette.setSaturationRange(50, 60);
+
+    const pts = try la.genRandomPoints(testing.allocator, num_pts, rng_seed, canvas_size, canvas_size);
+    defer testing.allocator.free(pts);
+    var canvas = svg.Canvas.init(testing.allocator, canvas_size, canvas_size);
+    defer canvas.deinit();
+    var col_buffer: [32]u8 = undefined;
+    const angle_inc = 6.28 / @as(f32, @floatFromInt(num_pts));
+
+    for (0..num_pts) |i| {
+        const a: f32 = @as(f32, @floatFromInt(i)) * angle_inc; // is there a less verbose way of doing this?
+        const cell_verts = try genCell(testing.allocator, pts, i, 30, 0.8, a);
+        defer testing.allocator.free(cell_verts);
+        const col = try palette.getRandomColour(&col_buffer);
+        try canvas.addPolygon(testing.allocator, cell_verts, col);
+    }
+
+    try canvas.writeHtml(testing.allocator, "test_cells.html");
+    std.debug.print("\nDone!\n", .{});
+}
+
+test "wood cells 2000 pts" {
+    const num_pts = 2000;
+    const rng_seed = 420;
 
     var palette = try colour.RandomHslPalette.init(rng_seed);
     try palette.setHueRange(30, 40);
     try palette.setLightnessRange(60, 80);
     try palette.setSaturationRange(30, 60);
 
-    const pts = try la.genRandomPoints(testing.allocator, num_pts, rng_seed, canvas_size, canvas_size);
+    const pts = try la.genRandomPoints(testing.allocator, num_pts, rng_seed, canvas_size, 0.4 * canvas_size);
     defer testing.allocator.free(pts);
     var canvas = svg.Canvas.init(testing.allocator, canvas_size, canvas_size);
     defer canvas.deinit();
-    var col_buffer:[32]u8 = undefined;
+    var col_buffer: [32]u8 = undefined;
+    const angle_inc = 6.28 / @as(f32, @floatFromInt(num_pts));
 
     for (0..num_pts) |i| {
-        const cell_verts = try genCell(testing.allocator, pts, i, 0, num_verts);
+        const a: f32 = @as(f32, @floatFromInt(i)) * angle_inc; // is there a less verbose way of doing this?
+        const cell_verts = try genCell(testing.allocator, pts, i, 16, 1, a);
         defer testing.allocator.free(cell_verts);
         const col = try palette.getRandomColour(&col_buffer);
         try canvas.addPolygon(testing.allocator, cell_verts, col);
-        //try canvas.addCircle(testing.allocator, pts[i], 5);
     }
 
-    try canvas.writeHtml(testing.allocator, "test_injera.html");
+    try canvas.writeHtml(testing.allocator, "test_wood.html");
     std.debug.print("\nDone!\n", .{});
 }
